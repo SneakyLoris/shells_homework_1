@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+if [[ $# != 1 || ! -d $1 ]]; then
+    printf 'Использование: %s каталог\n' "$0" >&2
+    exit 2
+fi
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 2))); then
+    printf 'Для ассоциативного массива требуется Bash 4.2 или новее.\n' >&2
+    exit 1
+fi
+
+dir=$(CDPATH= cd -- "$1" && pwd -P) || exit 1
+shopt -s lastpipe
+declare -A counts
+
+find "$dir" -type f -print0 | while IFS= read -r -d '' file; do
+    name=${file##*/}
+    suffix='no suffix'
+    if [[ ${name:1} == *.* ]]; then
+        suffix=.${name##*.}
+    fi
+    counts[$suffix]=$(( ${counts[$suffix]:-0} + 1 ))
+done || exit 1
+
+for suffix in "${!counts[@]}"; do
+    label=${suffix//\\/\\\\}
+    label=${label//$'\n'/\\n}
+    label=${label//$'\r'/\\r}
+    printf '%d\t%s: %d\n' "${counts[$suffix]}" "$label" "${counts[$suffix]}"
+done | LC_ALL=C sort -k1,1nr -k2 | cut -f2-

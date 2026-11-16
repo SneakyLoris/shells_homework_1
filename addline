@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+if [[ $# != 1 || ! -d $1 ]]; then
+    printf 'Использование: %s каталог\n' "$0" >&2
+    exit 2
+fi
+
+dir=$(CDPATH= cd -- "$1" && pwd -P) || exit 1
+user=$(id -un) || exit 1
+today=$(date +%F) || exit 1
+shopt -s nullglob dotglob
+temp=
+trap '[[ -z $temp ]] || rm -f -- "$temp"' EXIT
+
+status=0
+for file in "${dir%/}"/*.txt; do
+    [[ -f $file && ! -L $file ]] || continue
+    temp=$(mktemp "${dir%/}/.addline.XXXXXX") || exit 1
+    if mode=$(stat -c %a -- "$file" 2>/dev/null || stat -f %Lp -- "$file") &&
+        { printf 'Approved %s %s\n' "$user" "$today" && cat -- "$file"; } > "$temp" &&
+        chmod "$mode" "$temp" &&
+        mv -f -- "$temp" "$file"; then
+        temp=
+    else
+        printf 'Не удалось обработать: %s\n' "$file" >&2
+        rm -f -- "$temp" || exit 1
+        temp=
+        status=1
+    fi
+done
+exit "$status"

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+valid_suffix() {
+    [[ $1 == .* && ${1:1} != *.* && $1 != */* ]]
+}
+
+if [[ $# != 3 || ! -d $1 ]] || ! valid_suffix "$2" || ! valid_suffix "$3"; then
+    printf 'Использование: %s каталог .старый_суффикс .новый_суффикс\n' "$0" >&2
+    exit 2
+fi
+
+dir=$(CDPATH= cd -- "$1" && pwd -P) || exit 1
+old=$2
+new=$3
+[[ $old == "$new" ]] && exit 0
+
+find "$dir" -type f -print0 | (
+    status=0
+    while IFS= read -r -d '' file; do
+        name=${file##*/}
+        [[ ${name:1} == *.* && .${name##*.} == "$old" ]] || continue
+        target=${file/%"$old"/"$new"}
+        if [[ -e $target || -L $target ]]; then
+            printf 'Имя уже занято: %s\n' "$target" >&2
+            status=1
+        else
+            mv -n -- "$file" "$target" || status=1
+        fi
+    done
+    exit "$status"
+)

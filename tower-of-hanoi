@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+interrupt() {
+    interrupted=1
+    printf '\nДля выхода введите q или Q.\n'
+}
+trap interrupt INT
+
+A=0 B=1 C=2 a=0 b=1 c=2
+stacks=(87654321 '' '')
+turn=1
+
+draw_stacks() {
+    local row stack index disk
+    for ((row = 8; row > 0; row--)); do
+        for stack in "${stacks[@]}"; do
+            index=$((row - 1))
+            disk=${stack:index:1}
+            printf '|%s|  ' "${disk:- }"
+        done
+        printf '\n'
+    done
+    printf '+-+  +-+  +-+\n A    B    C\n'
+}
+
+while :; do
+    printf 'Ход № %d\n' "$turn"
+    draw_stacks
+    interrupted=0
+    printf 'Откуда, куда (q — выход): '
+    if ! IFS= read -r move; then
+        ((interrupted)) && continue
+        exit 1
+    fi
+    case $move in q|Q) exit 1 ;; esac
+
+    if [[ ! $move =~ ^[[:space:]]*([ABCabc])[[:space:]]*([ABCabc])[[:space:]]*$ ]]; then
+        printf 'Введите имена двух стеков: A, B или C.\n'
+        continue
+    fi
+    from=${!BASH_REMATCH[1]}
+    to=${!BASH_REMATCH[2]}
+    source=${stacks[from]}
+    destination=${stacks[to]}
+    disk=${source: -1}
+    top=${destination: -1}
+
+    if ((from == to)) || [[ -z $disk ]] || [[ -n $top && $disk -gt $top ]]; then
+        printf 'Такое перемещение запрещено!\n'
+        continue
+    fi
+
+    stacks[from]=${source%?}
+    stacks[to]+=$disk
+    if [[ ${stacks[B]} == 87654321 || ${stacks[C]} == 87654321 ]]; then
+        draw_stacks
+        printf 'Победа! Количество ходов: %d\n' "$turn"
+        exit 0
+    fi
+    ((turn++))
+done

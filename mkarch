@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -e
+
+usage() {
+    printf 'Использование: %s -d каталог -n имя_архива\n' "$0" >&2
+    exit 2
+}
+
+dir=
+name=
+while getopts ':d:n:' option; do
+    case $option in
+        d) dir=$OPTARG ;;
+        n) name=$OPTARG ;;
+        *) usage ;;
+    esac
+done
+shift "$((OPTIND - 1))"
+[[ $# == 0 && -d $dir && -n $name && $name != */* && $name != . && $name != .. ]] || usage
+
+if [[ -e ./$name || -L ./$name ]]; then
+    printf 'Файл уже существует: %s\n' "$name" >&2
+    exit 1
+fi
+
+source_dir=$(CDPATH= cd -- "$dir" && pwd -P)
+output_dir=$(pwd -P)
+temp=$(mktemp ./.mkarch.XXXXXX)
+trap 'rm -f -- "$temp"' EXIT
+
+exclude=()
+# Если архив создаётся внутри исходного каталога, исключаем сам временный файл.
+prefix=${source_dir%/}/
+if [[ $output_dir/ == "$prefix"* ]]; then
+    relative=${output_dir#"${prefix%/}"}
+    relative=${relative#/}
+    entry=${relative:+$relative/}${temp#./}
+    pattern=${entry//\\/\\\\}
+    pattern=${pattern//\*/\\*}
+    pattern=${pattern//\?/\\?}
+    pattern=${pattern//\[/\\[}
+    exclude=(--exclude="./$pattern")
+fi
+
+cat > "$temp" <<'EXTRACTOR'
+#!/usr/bin/env bash
+set -e
+set -o pipefail
+
+output=.
+if [[ $# == 2 && $1 == -o && -n $2 ]]; then
+    output=$2
+elif (($#)); then
+    printf 'Использование: %s [-o каталог]\n' "$0" >&2
+    exit 2
+fi
+mkdir -p -- "$output"
+start=$(awk '/^__ARCHIVE__$/ { print NR + 1; exit }' "$0")
+[[ -n $start ]] || exit 1
+tail -n "+$start" "$0" | tar -xzkf - -C "$output"
+exit
+__ARCHIVE__
+EXTRACTOR
+
+tar -czf - -C "$source_dir" "${exclude[@]}" . >> "$temp"
+chmod 755 "$temp"
+ln -- "$temp" "./$name"

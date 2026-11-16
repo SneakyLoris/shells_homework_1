@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+solved=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 0)
+board=("${solved[@]}")
+blank=15
+moves=0
+
+neighbors() {
+    nearby=()
+    ((blank >= 4)) && nearby+=("$((blank - 4))")
+    ((blank < 12)) && nearby+=("$((blank + 4))")
+    ((blank % 4 > 0)) && nearby+=("$((blank - 1))")
+    ((blank % 4 < 3)) && nearby+=("$((blank + 1))")
+}
+
+slide() {
+    board[blank]=${board[$1]}
+    board[$1]=0
+    blank=$1
+}
+
+draw_board() {
+    local i tile
+    for ((i = 0; i < 16; i++)); do
+        ((i % 4 == 0)) && printf '+----+----+----+----+\n|'
+        tile=${board[i]}
+        printf ' %-2s |' "${tile#0}"
+        ((i % 4 == 3)) && printf '\n'
+    done
+    printf '+----+----+----+----+\n'
+}
+
+# Перемешивание допустимыми ходами сохраняет решаемость.
+for ((i = 0; i < 100; i++)); do
+    neighbors
+    slide "${nearby[RANDOM % ${#nearby[@]}]}"
+done
+if [[ ${board[*]} == "${solved[*]}" ]]; then
+    slide 14
+fi
+
+while :; do
+    printf 'Ход № %d\n' "$((moves + 1))"
+    draw_board
+    printf 'Ваш ход (q — выход): '
+    IFS= read -r tile || exit 0
+    [[ $tile == q ]] && exit 0
+
+    neighbors
+    choices=()
+    target=
+    for position in "${nearby[@]}"; do
+        choices+=("${board[position]}")
+        [[ $tile == "${board[position]}" ]] && target=$position
+    done
+    if [[ -z $target ]]; then
+        printf 'Неверный ход! Можно выбрать: %s\n' "${choices[*]}"
+        continue
+    fi
+    slide "$target"
+    ((moves++))
+    if [[ ${board[*]} == "${solved[*]}" ]]; then
+        printf 'Головоломка собрана! Количество ходов: %d\n' "$moves"
+        draw_board
+        exit 0
+    fi
+done

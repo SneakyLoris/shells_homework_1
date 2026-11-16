@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+trap 'printf "\nДля выхода введите q или Q.\n"' INT
+
+secret=$((1 + RANDOM % 9))
+while ((${#secret} < 4)); do
+    digit=$((RANDOM % 10))
+    if [[ $secret != *"$digit"* ]]; then
+        secret+=$digit
+    fi
+done
+
+step=1
+history=()
+echo 'Я загадал четырёхзначное число с неповторяющимися цифрами.'
+
+while :; do
+    IFS= read -r -p "Попытка $step (q — выход): " guess
+    case $? in
+        0) ;;
+        130) continue ;;
+        *) exit 1 ;;
+    esac
+
+    case $guess in
+        q|Q) exit 1 ;;
+        [1-9][0-9][0-9][0-9]) ;;
+        *)
+            echo 'Введите четырёхзначное число с неповторяющимися цифрами.'
+            continue
+            ;;
+    esac
+
+    cows=0
+    bulls=0
+    for ((i = 0; i < 4; i++)); do
+        digit=${guess:i:1}
+        if [[ ${guess:0:i} == *"$digit"* ]]; then
+            echo 'Цифры не должны повторяться.'
+            continue 2
+        elif [[ $digit == "${secret:i:1}" ]]; then
+            ((bulls++))
+        elif [[ $secret == *"$digit"* ]]; then
+            ((cows++))
+        fi
+    done
+
+    result="Коров - $cows Быков - $bulls"
+    history+=("$step. $guess ($result)")
+    printf '%s\n' "$result" 'История ходов:' "${history[@]}"
+
+    if ((bulls == 4)); then
+        echo "Вы угадали число $secret!"
+        exit 0
+    fi
+    ((step++))
+done
